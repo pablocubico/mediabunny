@@ -6,9 +6,20 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { parsePcmCodec, PCM_AUDIO_CODECS, PcmAudioCodec, VideoCodec, AudioCodec } from './codec';
-import { CustomVideoDecoder, customVideoDecoders, CustomAudioDecoder, customAudioDecoders } from './custom-coder';
-import { InputAudioTrack, InputTrack, InputVideoTrack } from './input-track';
+import {
+	parsePcmCodec,
+	PCM_AUDIO_CODECS,
+	PcmAudioCodec,
+	VideoCodec,
+	AudioCodec,
+} from "./codec";
+import {
+	CustomVideoDecoder,
+	customVideoDecoders,
+	CustomAudioDecoder,
+	customAudioDecoders,
+} from "./custom-coder";
+import { InputAudioTrack, InputTrack, InputVideoTrack } from "./input-track";
 import {
 	AnyIterable,
 	assert,
@@ -25,10 +36,10 @@ import {
 	toAsyncIterator,
 	toDataView,
 	validateAnyIterable,
-} from './misc';
-import { EncodedPacket } from './packet';
-import { fromAlaw, fromUlaw } from './pcm';
-import { AudioSample, VideoSample } from './sample';
+} from "./misc";
+import { EncodedPacket } from "./packet";
+import { fromAlaw, fromUlaw } from "./pcm";
+import { AudioSample, VideoSample } from "./sample";
 
 /**
  * Additional options for controlling packet retrieval.
@@ -52,34 +63,46 @@ export type PacketRetrievalOptions = {
 };
 
 const validatePacketRetrievalOptions = (options: PacketRetrievalOptions) => {
-	if (!options || typeof options !== 'object') {
-		throw new TypeError('options must be an object.');
+	if (!options || typeof options !== "object") {
+		throw new TypeError("options must be an object.");
 	}
-	if (options.metadataOnly !== undefined && typeof options.metadataOnly !== 'boolean') {
-		throw new TypeError('options.metadataOnly, when defined, must be a boolean.');
+	if (
+		options.metadataOnly !== undefined &&
+		typeof options.metadataOnly !== "boolean"
+	) {
+		throw new TypeError(
+			"options.metadataOnly, when defined, must be a boolean."
+		);
 	}
-	if (options.verifyKeyPackets !== undefined && typeof options.verifyKeyPackets !== 'boolean') {
-		throw new TypeError('options.verifyKeyPackets, when defined, must be a boolean.');
+	if (
+		options.verifyKeyPackets !== undefined &&
+		typeof options.verifyKeyPackets !== "boolean"
+	) {
+		throw new TypeError(
+			"options.verifyKeyPackets, when defined, must be a boolean."
+		);
 	}
 	if (options.verifyKeyPackets && options.metadataOnly) {
-		throw new TypeError('options.verifyKeyPackets and options.metadataOnly cannot be enabled together.');
+		throw new TypeError(
+			"options.verifyKeyPackets and options.metadataOnly cannot be enabled together."
+		);
 	}
 };
 
 const validateTimestamp = (timestamp: number) => {
-	if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
-		throw new TypeError('timestamp must be a number.'); // It can be non-finite, that's fine
+	if (typeof timestamp !== "number" || Number.isNaN(timestamp)) {
+		throw new TypeError("timestamp must be a number."); // It can be non-finite, that's fine
 	}
 };
 
 const maybeFixPacketType = (
 	track: InputTrack,
 	promise: Promise<EncodedPacket | null>,
-	options: PacketRetrievalOptions,
+	options: PacketRetrievalOptions
 ) => {
 	if (options.verifyKeyPackets) {
 		return promise.then(async (packet) => {
-			if (!packet || packet.type === 'delta') {
+			if (!packet || packet.type === "delta") {
 				return packet;
 			}
 
@@ -108,7 +131,7 @@ export class EncodedPacketSink {
 	/** Creates a new {@link EncodedPacketSink} for the given {@link InputTrack}. */
 	constructor(track: InputTrack) {
 		if (!(track instanceof InputTrack)) {
-			throw new TypeError('track must be an InputTrack.');
+			throw new TypeError("track must be an InputTrack.");
 		}
 
 		this._track = track;
@@ -121,7 +144,11 @@ export class EncodedPacketSink {
 	getFirstPacket(options: PacketRetrievalOptions = {}) {
 		validatePacketRetrievalOptions(options);
 
-		return maybeFixPacketType(this._track, this._track._backing.getFirstPacket(options), options);
+		return maybeFixPacketType(
+			this._track,
+			this._track._backing.getFirstPacket(options),
+			options
+		);
 	}
 
 	/**
@@ -136,7 +163,11 @@ export class EncodedPacketSink {
 		validateTimestamp(timestamp);
 		validatePacketRetrievalOptions(options);
 
-		return maybeFixPacketType(this._track, this._track._backing.getPacket(timestamp, options), options);
+		return maybeFixPacketType(
+			this._track,
+			this._track._backing.getPacket(timestamp, options),
+			options
+		);
 	}
 
 	/**
@@ -145,11 +176,15 @@ export class EncodedPacketSink {
 	 */
 	getNextPacket(packet: EncodedPacket, options: PacketRetrievalOptions = {}) {
 		if (!(packet instanceof EncodedPacket)) {
-			throw new TypeError('packet must be an EncodedPacket.');
+			throw new TypeError("packet must be an EncodedPacket.");
 		}
 		validatePacketRetrievalOptions(options);
 
-		return maybeFixPacketType(this._track, this._track._backing.getNextPacket(packet, options), options);
+		return maybeFixPacketType(
+			this._track,
+			this._track._backing.getNextPacket(packet, options),
+			options
+		);
 	}
 
 	/**
@@ -163,7 +198,10 @@ export class EncodedPacketSink {
 	 *
 	 * @param timestamp - The timestamp used for retrieval, in seconds.
 	 */
-	async getKeyPacket(timestamp: number, options: PacketRetrievalOptions = {}): Promise<EncodedPacket | null> {
+	async getKeyPacket(
+		timestamp: number,
+		options: PacketRetrievalOptions = {}
+	): Promise<EncodedPacket | null> {
 		validateTimestamp(timestamp);
 		validatePacketRetrievalOptions(options);
 
@@ -172,14 +210,17 @@ export class EncodedPacketSink {
 		}
 
 		const packet = await this._track._backing.getKeyPacket(timestamp, options);
-		if (!packet || packet.type === 'delta') {
+		if (!packet || packet.type === "delta") {
 			return packet;
 		}
 
 		const determinedType = await this._track.determinePacketType(packet);
-		if (determinedType === 'delta') {
+		if (determinedType === "delta") {
 			// Try returning the previous key packet (in hopes that it's actually a key packet)
-			return this.getKeyPacket(packet.timestamp - 1 / this._track.timeResolution, options);
+			return this.getKeyPacket(
+				packet.timestamp - 1 / this._track.timeResolution,
+				options
+			);
 		}
 
 		return packet;
@@ -191,9 +232,12 @@ export class EncodedPacketSink {
 	 *
 	 * To ensure that the returned packet is guaranteed to be a real key frame, enable `options.verifyKeyPackets`.
 	 */
-	async getNextKeyPacket(packet: EncodedPacket, options: PacketRetrievalOptions = {}): Promise<EncodedPacket | null> {
+	async getNextKeyPacket(
+		packet: EncodedPacket,
+		options: PacketRetrievalOptions = {}
+	): Promise<EncodedPacket | null> {
 		if (!(packet instanceof EncodedPacket)) {
-			throw new TypeError('packet must be an EncodedPacket.');
+			throw new TypeError("packet must be an EncodedPacket.");
 		}
 		validatePacketRetrievalOptions(options);
 
@@ -201,13 +245,16 @@ export class EncodedPacketSink {
 			return this._track._backing.getNextKeyPacket(packet, options);
 		}
 
-		const nextPacket = await this._track._backing.getNextKeyPacket(packet, options);
-		if (!nextPacket || nextPacket.type === 'delta') {
+		const nextPacket = await this._track._backing.getNextKeyPacket(
+			packet,
+			options
+		);
+		if (!nextPacket || nextPacket.type === "delta") {
 			return nextPacket;
 		}
 
 		const determinedType = await this._track.determinePacketType(nextPacket);
-		if (determinedType === 'delta') {
+		if (determinedType === "delta") {
 			// Try returning the next key packet (in hopes that it's actually a key packet)
 			return this.getNextKeyPacket(nextPacket, options);
 		}
@@ -225,23 +272,31 @@ export class EncodedPacketSink {
 	packets(
 		startPacket?: EncodedPacket,
 		endPacket?: EncodedPacket,
-		options: PacketRetrievalOptions = {},
+		options: PacketRetrievalOptions = {}
 	): AsyncGenerator<EncodedPacket, void, unknown> {
 		if (startPacket !== undefined && !(startPacket instanceof EncodedPacket)) {
-			throw new TypeError('startPacket must be an EncodedPacket.');
+			throw new TypeError("startPacket must be an EncodedPacket.");
 		}
-		if (startPacket !== undefined && startPacket.isMetadataOnly && !options?.metadataOnly) {
-			throw new TypeError('startPacket can only be metadata-only if options.metadataOnly is enabled.');
+		if (
+			startPacket !== undefined &&
+			startPacket.isMetadataOnly &&
+			!options?.metadataOnly
+		) {
+			throw new TypeError(
+				"startPacket can only be metadata-only if options.metadataOnly is enabled."
+			);
 		}
 		if (endPacket !== undefined && !(endPacket instanceof EncodedPacket)) {
-			throw new TypeError('endPacket must be an EncodedPacket.');
+			throw new TypeError("endPacket must be an EncodedPacket.");
 		}
 		validatePacketRetrievalOptions(options);
 
 		const packetQueue: EncodedPacket[] = [];
 
-		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers();
-		let { promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers();
+		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+			promiseWithResolvers();
+		let { promise: queueDequeue, resolve: onQueueDequeue } =
+			promiseWithResolvers();
 		let ended = false;
 		let terminated = false;
 
@@ -256,7 +311,7 @@ export class EncodedPacketSink {
 
 		// The following is the "pump" process that keeps pumping packets into the queue
 		(async () => {
-			let packet = startPacket ?? await this.getFirstPacket(options);
+			let packet = startPacket ?? (await this.getFirstPacket(options));
 
 			while (packet && !terminated) {
 				if (endPacket && packet.sequenceNumber >= endPacket?.sequenceNumber) {
@@ -264,7 +319,8 @@ export class EncodedPacketSink {
 				}
 
 				if (packetQueue.length > maxQueueSize()) {
-					({ promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers());
+					({ promise: queueDequeue, resolve: onQueueDequeue } =
+						promiseWithResolvers());
 					await queueDequeue;
 					continue;
 				}
@@ -272,7 +328,8 @@ export class EncodedPacketSink {
 				packetQueue.push(packet);
 
 				onQueueNotEmpty();
-				({ promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers());
+				({ promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+					promiseWithResolvers());
 
 				packet = await this.getNextPacket(packet, options);
 			}
@@ -329,12 +386,10 @@ export class EncodedPacketSink {
 	}
 }
 
-abstract class DecoderWrapper<
-	MediaSample extends VideoSample | AudioSample,
-> {
+abstract class DecoderWrapper<MediaSample extends VideoSample | AudioSample> {
 	constructor(
 		public onSample: (sample: MediaSample) => unknown,
-		public onError: (error: DOMException) => unknown,
+		public onError: (error: DOMException) => unknown
 	) {}
 
 	abstract getDecodeQueueSize(): number;
@@ -349,7 +404,7 @@ abstract class DecoderWrapper<
  * @public
  */
 export abstract class BaseMediaSampleSink<
-	MediaSample extends VideoSample | AudioSample,
+	MediaSample extends VideoSample | AudioSample
 > {
 	/** @internal */
 	abstract _createDecoder(
@@ -362,7 +417,7 @@ export abstract class BaseMediaSampleSink<
 	/** @internal */
 	protected mediaSamplesInRange(
 		startTimestamp = 0,
-		endTimestamp = Infinity,
+		endTimestamp = Infinity
 	): AsyncGenerator<MediaSample, void, unknown> {
 		validateTimestamp(startTimestamp);
 		validateTimestamp(endTimestamp);
@@ -370,8 +425,10 @@ export abstract class BaseMediaSampleSink<
 		const sampleQueue: MediaSample[] = [];
 		let firstSampleQueued = false;
 		let lastSample: MediaSample | null = null;
-		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers();
-		let { promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers();
+		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+			promiseWithResolvers();
+		let { promise: queueDequeue, resolve: onQueueDequeue } =
+			promiseWithResolvers();
 		let decoderIsFlushed = false;
 		let ended = false;
 		let terminated = false;
@@ -384,52 +441,58 @@ export abstract class BaseMediaSampleSink<
 		// The following is the "pump" process that keeps pumping packets into the decoder
 		(async () => {
 			const decoderError = new Error();
-			const decoder = await this._createDecoder((sample) => {
-				onQueueDequeue();
-				if (sample.timestamp >= endTimestamp) {
-					ended = true;
-				}
+			const decoder = await this._createDecoder(
+				(sample) => {
+					onQueueDequeue();
+					if (sample.timestamp >= endTimestamp) {
+						ended = true;
+					}
 
-				if (ended) {
-					sample.close();
-					return;
-				}
+					if (ended) {
+						sample.close();
+						return;
+					}
 
-				if (lastSample) {
-					if (sample.timestamp > startTimestamp) {
-						// We don't know ahead of time what the first first is. This is because the first first is the
-						// last first whose timestamp is less than or equal to the start timestamp. Therefore we need to
-						// wait for the first first after the start timestamp, and then we'll know that the previous
-						// first was the first first.
-						sampleQueue.push(lastSample);
+					if (lastSample) {
+						if (sample.timestamp > startTimestamp) {
+							// We don't know ahead of time what the first first is. This is because the first first is the
+							// last first whose timestamp is less than or equal to the start timestamp. Therefore we need to
+							// wait for the first first after the start timestamp, and then we'll know that the previous
+							// first was the first first.
+							sampleQueue.push(lastSample);
+							firstSampleQueued = true;
+						} else {
+							lastSample.close();
+						}
+					}
+
+					if (sample.timestamp >= startTimestamp) {
+						sampleQueue.push(sample);
 						firstSampleQueued = true;
-					} else {
-						lastSample.close();
+					}
+
+					lastSample = firstSampleQueued ? null : sample;
+
+					if (sampleQueue.length > 0) {
+						onQueueNotEmpty();
+						({ promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+							promiseWithResolvers());
+					}
+				},
+				(error) => {
+					if (!outOfBandError) {
+						error.stack = decoderError.stack; // Provide a more useful stack trace
+						outOfBandError = error;
+						onQueueNotEmpty();
 					}
 				}
-
-				if (sample.timestamp >= startTimestamp) {
-					sampleQueue.push(sample);
-					firstSampleQueued = true;
-				}
-
-				lastSample = firstSampleQueued ? null : sample;
-
-				if (sampleQueue.length > 0) {
-					onQueueNotEmpty();
-					({ promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers());
-				}
-			}, (error) => {
-				if (!outOfBandError) {
-					error.stack = decoderError.stack; // Provide a more useful stack trace
-					outOfBandError = error;
-					onQueueNotEmpty();
-				}
-			});
+			);
 
 			const packetSink = this._createPacketSink();
-			const keyPacket = await packetSink.getKeyPacket(startTimestamp, { verifyKeyPackets: true })
-				?? await packetSink.getFirstPacket();
+			const keyPacket =
+				(await packetSink.getKeyPacket(startTimestamp, {
+					verifyKeyPackets: true,
+				})) ?? (await packetSink.getFirstPacket());
 			if (!keyPacket) {
 				return;
 			}
@@ -445,9 +508,11 @@ export abstract class BaseMediaSampleSink<
 				const packet = await packetSink.getPacket(endTimestamp);
 				const keyPacket = !packet
 					? null
-					: packet.type === 'key' && packet.timestamp === endTimestamp
-						? packet
-						: await packetSink.getNextKeyPacket(packet, { verifyKeyPackets: true });
+					: packet.type === "key" && packet.timestamp === endTimestamp
+					? packet
+					: await packetSink.getNextKeyPacket(packet, {
+							verifyKeyPackets: true,
+					  });
 
 				if (keyPacket) {
 					endPacket = keyPacket;
@@ -460,7 +525,8 @@ export abstract class BaseMediaSampleSink<
 			while (currentPacket && !ended) {
 				const maxQueueSize = computeMaxQueueSize(sampleQueue.length);
 				if (sampleQueue.length + decoder.getDecodeQueueSize() > maxQueueSize) {
-					({ promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers());
+					({ promise: queueDequeue, resolve: onQueueDequeue } =
+						promiseWithResolvers());
 					await queueDequeue;
 					continue;
 				}
@@ -536,15 +602,17 @@ export abstract class BaseMediaSampleSink<
 
 	/** @internal */
 	protected mediaSamplesAtTimestamps(
-		timestamps: AnyIterable<number>,
+		timestamps: AnyIterable<number>
 	): AsyncGenerator<MediaSample | null, void, unknown> {
 		validateAnyIterable(timestamps);
 		const timestampIterator = toAsyncIterator(timestamps);
 		const timestampsOfInterest: number[] = [];
 
 		const sampleQueue: (MediaSample | null)[] = [];
-		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers();
-		let { promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers();
+		let { promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+			promiseWithResolvers();
+		let { promise: queueDequeue, resolve: onQueueDequeue } =
+			promiseWithResolvers();
 		let decoderIsFlushed = false;
 		let terminated = false;
 
@@ -556,44 +624,50 @@ export abstract class BaseMediaSampleSink<
 		const pushToQueue = (sample: MediaSample | null) => {
 			sampleQueue.push(sample);
 			onQueueNotEmpty();
-			({ promise: queueNotEmpty, resolve: onQueueNotEmpty } = promiseWithResolvers());
+			({ promise: queueNotEmpty, resolve: onQueueNotEmpty } =
+				promiseWithResolvers());
 		};
 
 		// The following is the "pump" process that keeps pumping packets into the decoder
 		(async () => {
 			const decoderError = new Error();
-			const decoder = await this._createDecoder((sample) => {
-				onQueueDequeue();
+			const decoder = await this._createDecoder(
+				(sample) => {
+					onQueueDequeue();
 
-				if (terminated) {
-					sample.close();
-					return;
-				}
-
-				let sampleUses = 0;
-				while (
-					timestampsOfInterest.length > 0
-					&& sample.timestamp - timestampsOfInterest[0]! > -1e-10 // Give it a little epsilon
-				) {
-					sampleUses++;
-					timestampsOfInterest.shift();
-				}
-
-				if (sampleUses > 0) {
-					for (let i = 0; i < sampleUses; i++) {
-						// Clone the sample if we need to emit it multiple times
-						pushToQueue((i < sampleUses - 1 ? sample.clone() : sample) as MediaSample);
+					if (terminated) {
+						sample.close();
+						return;
 					}
-				} else {
-					sample.close();
+
+					let sampleUses = 0;
+					while (
+						timestampsOfInterest.length > 0 &&
+						sample.timestamp - timestampsOfInterest[0]! > -1e-10 // Give it a little epsilon
+					) {
+						sampleUses++;
+						timestampsOfInterest.shift();
+					}
+
+					if (sampleUses > 0) {
+						for (let i = 0; i < sampleUses; i++) {
+							// Clone the sample if we need to emit it multiple times
+							pushToQueue(
+								(i < sampleUses - 1 ? sample.clone() : sample) as MediaSample
+							);
+						}
+					} else {
+						sample.close();
+					}
+				},
+				(error) => {
+					if (!outOfBandError) {
+						error.stack = decoderError.stack; // Provide a more useful stack trace
+						outOfBandError = error;
+						onQueueNotEmpty();
+					}
 				}
-			}, (error) => {
-				if (!outOfBandError) {
-					error.stack = decoderError.stack; // Provide a more useful stack trace
-					outOfBandError = error;
-					onQueueNotEmpty();
-				}
-			});
+			);
 
 			const packetSink = this._createPacketSink();
 			let lastPacket: EncodedPacket | null = null;
@@ -612,8 +686,12 @@ export abstract class BaseMediaSampleSink<
 
 				while (currentPacket.sequenceNumber < maxSequenceNumber) {
 					const maxQueueSize = computeMaxQueueSize(sampleQueue.length);
-					while (sampleQueue.length + decoder.getDecodeQueueSize() > maxQueueSize && !terminated) {
-						({ promise: queueDequeue, resolve: onQueueDequeue } = promiseWithResolvers());
+					while (
+						sampleQueue.length + decoder.getDecodeQueueSize() > maxQueueSize &&
+						!terminated
+					) {
+						({ promise: queueDequeue, resolve: onQueueDequeue } =
+							promiseWithResolvers());
 						await queueDequeue;
 					}
 
@@ -650,7 +728,11 @@ export abstract class BaseMediaSampleSink<
 				}
 
 				const targetPacket = await packetSink.getPacket(timestamp);
-				const keyPacket = targetPacket && await packetSink.getKeyPacket(timestamp, { verifyKeyPackets: true });
+				const keyPacket =
+					targetPacket &&
+					(await packetSink.getKeyPacket(timestamp, {
+						verifyKeyPackets: true,
+					}));
 
 				if (!keyPacket) {
 					if (maxSequenceNumber !== -1) {
@@ -665,18 +747,19 @@ export abstract class BaseMediaSampleSink<
 
 				// Check if the key packet has changed or if we're going back in time
 				if (
-					lastPacket
-					&& (
-						keyPacket.sequenceNumber !== lastKeyPacket!.sequenceNumber
-						|| targetPacket.timestamp < lastPacket.timestamp
-					)
+					lastPacket &&
+					(keyPacket.sequenceNumber !== lastKeyPacket!.sequenceNumber ||
+						targetPacket.timestamp < lastPacket.timestamp)
 				) {
 					await decodePackets();
 					await flushDecoder(); // Always flush here, improves decoder compatibility
 				}
 
 				timestampsOfInterest.push(targetPacket.timestamp);
-				maxSequenceNumber = Math.max(targetPacket.sequenceNumber, maxSequenceNumber);
+				maxSequenceNumber = Math.max(
+					targetPacket.sequenceNumber,
+					maxSequenceNumber
+				);
 
 				lastPacket = targetPacket;
 				lastKeyPacket = keyPacket;
@@ -764,11 +847,13 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 		codec: VideoCodec,
 		decoderConfig: VideoDecoderConfig,
 		public rotation: Rotation,
-		public timeResolution: number,
+		public timeResolution: number
 	) {
 		super(onSample, onError);
 
-		const MatchingCustomDecoder = customVideoDecoders.find(x => x.supports(codec, decoderConfig));
+		const MatchingCustomDecoder = customVideoDecoders.find((x) =>
+			x.supports(codec, decoderConfig)
+		);
 		if (MatchingCustomDecoder) {
 			// @ts-expect-error "Can't create instance of abstract class 🤓"
 			this.customDecoder = new MatchingCustomDecoder() as CustomVideoDecoder;
@@ -779,13 +864,17 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 			// @ts-expect-error It's technically readonly
 			this.customDecoder.onSample = (sample) => {
 				if (!(sample instanceof VideoSample)) {
-					throw new TypeError('The argument passed to onSample must be a VideoSample.');
+					throw new TypeError(
+						"The argument passed to onSample must be a VideoSample."
+					);
 				}
 
 				this.finalizeAndEmitSample(sample);
 			};
 
-			void this.customDecoderCallSerializer.call(() => this.customDecoder!.init());
+			void this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.init()
+			);
 		} else {
 			// Specific handler for the WebCodecs VideoDecoder to iron out browser differences
 			const sampleHandler = (sample: VideoSample) => {
@@ -795,7 +884,10 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 					// each time we receive a frame with a timestamp larger than the highest we've seen so far, as we
 					// can sure that is not a B-frame. Typically, WebCodecs automatically guarantees that frames are
 					// emitted in presentation order, but Safari doesn't always follow this rule.
-					if (this.sampleQueue.length > 0 && (sample.timestamp >= last(this.sampleQueue)!.timestamp)) {
+					if (
+						this.sampleQueue.length > 0 &&
+						sample.timestamp >= last(this.sampleQueue)!.timestamp
+					) {
 						for (const sample of this.sampleQueue) {
 							this.finalizeAndEmitSample(sample);
 						}
@@ -803,7 +895,7 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 						this.sampleQueue.length = 0;
 					}
 
-					insertSorted(this.sampleQueue, sample, x => x.timestamp);
+					insertSorted(this.sampleQueue, sample, (x) => x.timestamp);
 				} else {
 					// Assign it the next earliest timestamp from the input. We do this because browsers, by spec, are
 					// required to emit decoded frames in presentation order *while* retaining the timestamp of their
@@ -822,7 +914,7 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 			};
 
 			this.decoder = new VideoDecoder({
-				output: frame => sampleHandler(new VideoSample(frame)),
+				output: (frame) => sampleHandler(new VideoSample(frame)),
 				error: onError,
 			});
 			this.decoder.configure(decoderConfig);
@@ -831,8 +923,12 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 
 	finalizeAndEmitSample(sample: VideoSample) {
 		// Round the timestamps to the time resolution
-		sample.setTimestamp(Math.round(sample.timestamp * this.timeResolution) / this.timeResolution);
-		sample.setDuration(Math.round(sample.duration * this.timeResolution) / this.timeResolution);
+		sample.setTimestamp(
+			Math.round(sample.timestamp * this.timeResolution) / this.timeResolution
+		);
+		sample.setDuration(
+			Math.round(sample.duration * this.timeResolution) / this.timeResolution
+		);
 		sample.setRotation(this.rotation);
 
 		this.onSample(sample);
@@ -857,7 +953,7 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 			assert(this.decoder);
 
 			if (!isSafari()) {
-				insertSorted(this.inputTimestamps, packet.timestamp, x => x);
+				insertSorted(this.inputTimestamps, packet.timestamp, (x) => x);
 			}
 
 			this.decoder.decode(packet.toEncodedVideoChunk());
@@ -866,7 +962,9 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 
 	async flush() {
 		if (this.customDecoder) {
-			await this.customDecoderCallSerializer.call(() => this.customDecoder!.flush());
+			await this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.flush()
+			);
 		} else {
 			assert(this.decoder);
 			await this.decoder.flush();
@@ -883,7 +981,9 @@ class VideoDecoderWrapper extends DecoderWrapper<VideoSample> {
 
 	close() {
 		if (this.customDecoder) {
-			void this.customDecoderCallSerializer.call(() => this.customDecoder!.close());
+			void this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.close()
+			);
 		} else {
 			assert(this.decoder);
 			this.decoder.close();
@@ -908,7 +1008,7 @@ export class VideoSampleSink extends BaseMediaSampleSink<VideoSample> {
 	/** Creates a new {@link VideoSampleSink} for the given {@link InputVideoTrack}. */
 	constructor(videoTrack: InputVideoTrack) {
 		if (!(videoTrack instanceof InputVideoTrack)) {
-			throw new TypeError('videoTrack must be an InputVideoTrack.');
+			throw new TypeError("videoTrack must be an InputVideoTrack.");
 		}
 
 		super();
@@ -919,12 +1019,12 @@ export class VideoSampleSink extends BaseMediaSampleSink<VideoSample> {
 	/** @internal */
 	async _createDecoder(
 		onSample: (sample: VideoSample) => unknown,
-		onError: (error: DOMException) => unknown,
+		onError: (error: DOMException) => unknown
 	) {
 		if (!(await this._videoTrack.canDecode())) {
 			throw new Error(
-				'This video track cannot be decoded by this browser. Make sure to check decodability before using'
-				+ ' a track.',
+				"This video track cannot be decoded by this browser. Make sure to check decodability before using" +
+					" a track."
 			);
 		}
 
@@ -934,7 +1034,14 @@ export class VideoSampleSink extends BaseMediaSampleSink<VideoSample> {
 		const timeResolution = this._videoTrack.timeResolution;
 		assert(codec && decoderConfig);
 
-		return new VideoDecoderWrapper(onSample, onError, codec, decoderConfig, rotation, timeResolution);
+		return new VideoDecoderWrapper(
+			onSample,
+			onError,
+			codec,
+			decoderConfig,
+			rotation,
+			timeResolution
+		);
 	}
 
 	/** @internal */
@@ -955,7 +1062,7 @@ export class VideoSampleSink extends BaseMediaSampleSink<VideoSample> {
 		for await (const sample of this.mediaSamplesAtTimestamps([timestamp])) {
 			return sample;
 		}
-		throw new Error('Internal error: Iterator returned nothing.');
+		throw new Error("Internal error: Iterator returned nothing.");
 	}
 
 	/**
@@ -1003,16 +1110,25 @@ export type WrappedCanvas = {
  */
 export type CanvasSinkOptions = {
 	/**
-         * Specifies a rectangular region of the original video frame to crop to, in the coordinate system of the
-         * unrotated source frame. Parts of the crop rectangle that extend beyond the source frame will be filled with
-         * black. Cropping is performed before rotation and resizing.
-         */
-	crop?: { left: number; top: number; width: number; height: number };
+	 * Specifies a rectangular region of the original video frame to crop to, in the coordinate system of the
+	 * unrotated source frame. Parts of the crop rectangle that extend beyond the source frame will be filled with
+	 * black. Cropping is performed before rotation and resizing.
+	 */
+	crop?: {
+		/** The distance in pixels from the left edge of the source frame to the left edge of the crop rectangle. */
+		left: number;
+		/** The distance in pixels from the top edge of the source frame to the top edge of the crop rectangle. */
+		top: number;
+		/** The width in pixels of the crop rectangle. */
+		width: number;
+		/** The height in pixels of the crop rectangle. */
+		height: number;
+	};
 	/**
-         * The width of the output canvas in pixels, defaulting to the display width of the
-         * video track. If height is not set, it will be deduced automatically based on
-         * aspect ratio.
-         */
+	 * The width of the output canvas in pixels, defaulting to the display width of the
+	 * video track. If height is not set, it will be deduced automatically based on
+	 * aspect ratio.
+	 */
 	width?: number;
 	/**
 	 * The height of the output canvas in pixels, defaulting to the display height of the video track. If width is not
@@ -1027,19 +1143,19 @@ export type CanvasSinkOptions = {
 	 * letterboxing.
 	 * - `'cover'` will scale the image until the entire box is filled, while preserving aspect ratio.
 	 */
-	fit?: 'fill' | 'contain' | 'cover';
+	fit?: "fill" | "contain" | "cover";
 	/**
 	 * The clockwise rotation by which to rotate the raw video frame. Defaults to the rotation set in the file metadata.
 	 * Rotation is applied before resizing.
 	 */
 	rotation?: Rotation;
 	/**
-         * When set, specifies the number of canvases in the pool. These canvases will be
-         * reused in a ring buffer / round-robin type fashion. This keeps the amount of
-         * allocated VRAM constant and relieves the browser from constantly
-         * allocating/deallocating canvases. A pool size of 0 or `undefined` disables the
-         * pool and means a new canvas is created each time.
-         */
+	 * When set, specifies the number of canvases in the pool. These canvases will be
+	 * reused in a ring buffer / round-robin type fashion. This keeps the amount of
+	 * allocated VRAM constant and relieves the browser from constantly
+	 * allocating/deallocating canvases. A pool size of 0 or `undefined` disables the
+	 * pool and means a new canvas is created each time.
+	 */
 	poolSize?: number;
 };
 
@@ -1061,7 +1177,7 @@ export class CanvasSink {
 	/** @internal */
 	_height: number;
 	/** @internal */
-	_fit: 'fill' | 'contain' | 'cover';
+	_fit: "fill" | "contain" | "cover";
 	/** @internal */
 	_rotation: Rotation;
 	/** @internal */
@@ -1076,55 +1192,77 @@ export class CanvasSink {
 	/** Creates a new {@link CanvasSink} for the given {@link InputVideoTrack}. */
 	constructor(videoTrack: InputVideoTrack, options: CanvasSinkOptions = {}) {
 		if (!(videoTrack instanceof InputVideoTrack)) {
-			throw new TypeError('videoTrack must be an InputVideoTrack.');
+			throw new TypeError("videoTrack must be an InputVideoTrack.");
 		}
-		if (options && typeof options !== 'object') {
-			throw new TypeError('options must be an object.');
+		if (options && typeof options !== "object") {
+			throw new TypeError("options must be an object.");
 		}
-		if (options.width !== undefined && (!Number.isInteger(options.width) || options.width <= 0)) {
-			throw new TypeError('options.width, when defined, must be a positive integer.');
+		if (
+			options.width !== undefined &&
+			(!Number.isInteger(options.width) || options.width <= 0)
+		) {
+			throw new TypeError(
+				"options.width, when defined, must be a positive integer."
+			);
 		}
-		if (options.height !== undefined && (!Number.isInteger(options.height) || options.height <= 0)) {
-			throw new TypeError('options.height, when defined, must be a positive integer.');
+		if (
+			options.height !== undefined &&
+			(!Number.isInteger(options.height) || options.height <= 0)
+		) {
+			throw new TypeError(
+				"options.height, when defined, must be a positive integer."
+			);
 		}
 		if (options.crop !== undefined) {
-			if (typeof options.crop !== 'object') {
-				throw new TypeError('options.crop, when provided, must be an object.');
+			if (typeof options.crop !== "object") {
+				throw new TypeError("options.crop, when provided, must be an object.");
 			}
 			const { left, top, width, height } = options.crop;
 			if (!Number.isInteger(left)) {
-				throw new TypeError('options.crop.left must be an integer.');
+				throw new TypeError("options.crop.left must be an integer.");
 			}
 			if (!Number.isInteger(top)) {
-				throw new TypeError('options.crop.top must be an integer.');
+				throw new TypeError("options.crop.top must be an integer.");
 			}
 			if (!Number.isInteger(width) || width <= 0) {
-				throw new TypeError('options.crop.width must be a positive integer.');
+				throw new TypeError("options.crop.width must be a positive integer.");
 			}
 			if (!Number.isInteger(height) || height <= 0) {
-				throw new TypeError('options.crop.height must be a positive integer.');
+				throw new TypeError("options.crop.height must be a positive integer.");
 			}
 		}
-		if (options.fit !== undefined && !['fill', 'contain', 'cover'].includes(options.fit)) {
-			throw new TypeError('options.fit, when provided, must be one of "fill", "contain", or "cover".');
-		}
 		if (
-			options.width !== undefined
-			&& options.height !== undefined
-			&& options.fit === undefined
+			options.fit !== undefined &&
+			!["fill", "contain", "cover"].includes(options.fit)
 		) {
 			throw new TypeError(
-				'When both options.width and options.height are provided, options.fit must also be provided.',
+				'options.fit, when provided, must be one of "fill", "contain", or "cover".'
 			);
 		}
-		if (options.rotation !== undefined && ![0, 90, 180, 270].includes(options.rotation)) {
-			throw new TypeError('options.rotation, when provided, must be 0, 90, 180 or 270.');
+		if (
+			options.width !== undefined &&
+			options.height !== undefined &&
+			options.fit === undefined
+		) {
+			throw new TypeError(
+				"When both options.width and options.height are provided, options.fit must also be provided."
+			);
 		}
 		if (
-			options.poolSize !== undefined
-			&& (typeof options.poolSize !== 'number' || !Number.isInteger(options.poolSize) || options.poolSize < 0)
+			options.rotation !== undefined &&
+			![0, 90, 180, 270].includes(options.rotation)
 		) {
-			throw new TypeError('poolSize must be a non-negative integer.');
+			throw new TypeError(
+				"options.rotation, when provided, must be 0, 90, 180 or 270."
+			);
+		}
+		if (
+			options.poolSize !== undefined &&
+			(typeof options.poolSize !== "number" ||
+				!Number.isInteger(options.poolSize) ||
+				options.poolSize < 0)
+		) {
+			throw new TypeError("poolSize must be a non-negative integer.");
 		}
 
 		const rotation = options.rotation ?? videoTrack.rotation;
@@ -1132,9 +1270,10 @@ export class CanvasSink {
 		const [croppedWidth, croppedHeight] = crop
 			? [crop.width, crop.height]
 			: [videoTrack.codedWidth, videoTrack.codedHeight];
-		let [width, height] = rotation % 180 === 0
-			? [croppedWidth, croppedHeight]
-			: [croppedHeight, croppedWidth];
+		let [width, height] =
+			rotation % 180 === 0
+				? [croppedWidth, croppedHeight]
+				: [croppedHeight, croppedWidth];
 		const originalAspectRatio = width / height;
 
 		// If width and height aren't defined together, deduce the missing value using the aspect ratio
@@ -1154,9 +1293,12 @@ export class CanvasSink {
 		this._height = height;
 		this._rotation = rotation;
 		this._crop = crop;
-		this._fit = options.fit ?? 'fill';
+		this._fit = options.fit ?? "fill";
 		this._videoSampleSink = new VideoSampleSink(videoTrack);
-		this._canvasPool = Array.from({ length: options.poolSize ?? 0 }, () => null);
+		this._canvasPool = Array.from(
+			{ length: options.poolSize ?? 0 },
+			() => null
+		);
 	}
 
 	/** @internal */
@@ -1165,9 +1307,9 @@ export class CanvasSink {
 		let canvasIsNew = false;
 
 		if (!canvas) {
-			if (typeof document !== 'undefined') {
+			if (typeof document !== "undefined") {
 				// Prefer an HTMLCanvasElement
-				canvas = document.createElement('canvas');
+				canvas = document.createElement("canvas");
 				canvas.width = this._width;
 				canvas.height = this._height;
 			} else {
@@ -1182,12 +1324,13 @@ export class CanvasSink {
 		}
 
 		if (this._canvasPool.length > 0) {
-			this._nextCanvasIndex = (this._nextCanvasIndex + 1) % this._canvasPool.length;
+			this._nextCanvasIndex =
+				(this._nextCanvasIndex + 1) % this._canvasPool.length;
 		}
 
-		const context
-                        = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
-                        | OffscreenCanvasRenderingContext2D;
+		const context = canvas.getContext("2d", { alpha: false }) as
+			| CanvasRenderingContext2D
+			| OffscreenCanvasRenderingContext2D;
 		assert(context);
 
 		context.resetTransform();
@@ -1200,15 +1343,17 @@ export class CanvasSink {
 
 		if (this._crop) {
 			const { left, top, width: cWidth, height: cHeight } = this._crop;
-			const cropCanvas = typeof document !== 'undefined'
-				? document.createElement('canvas')
-				: new OffscreenCanvas(cWidth, cHeight);
+			const cropCanvas =
+				typeof document !== "undefined"
+					? document.createElement("canvas")
+					: new OffscreenCanvas(cWidth, cHeight);
 			cropCanvas.width = cWidth;
 			cropCanvas.height = cHeight;
-			const cropCtx = cropCanvas.getContext('2d', { alpha: false }) as
-                                CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+			const cropCtx = cropCanvas.getContext("2d", { alpha: false }) as
+				| CanvasRenderingContext2D
+				| OffscreenCanvasRenderingContext2D;
 			assert(cropCtx);
-			cropCtx.fillStyle = '#000';
+			cropCtx.fillStyle = "#000";
 			cropCtx.fillRect(0, 0, cWidth, cHeight);
 			cropCtx.drawImage(sample.toCanvasImageSource(), -left, -top);
 
@@ -1260,7 +1405,7 @@ export class CanvasSink {
 	canvases(startTimestamp = 0, endTimestamp = Infinity) {
 		return mapAsyncGenerator(
 			this._videoSampleSink.samples(startTimestamp, endTimestamp),
-			sample => this._videoSampleToWrappedCanvas(sample),
+			(sample) => this._videoSampleToWrappedCanvas(sample)
 		);
 	}
 
@@ -1275,7 +1420,7 @@ export class CanvasSink {
 	canvasesAtTimestamps(timestamps: AnyIterable<number>) {
 		return mapAsyncGenerator(
 			this._videoSampleSink.samplesAtTimestamps(timestamps),
-			sample => sample && this._videoSampleToWrappedCanvas(sample),
+			(sample) => sample && this._videoSampleToWrappedCanvas(sample)
 		);
 	}
 }
@@ -1295,14 +1440,14 @@ class AudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 		onSample: (sample: AudioSample) => unknown,
 		onError: (error: DOMException) => unknown,
 		codec: AudioCodec,
-		decoderConfig: AudioDecoderConfig,
+		decoderConfig: AudioDecoderConfig
 	) {
 		super(onSample, onError);
 
 		const sampleHandler = (sample: AudioSample) => {
 			if (
-				this.currentTimestamp === null
-				|| Math.abs(sample.timestamp - this.currentTimestamp) >= sample.duration
+				this.currentTimestamp === null ||
+				Math.abs(sample.timestamp - this.currentTimestamp) >= sample.duration
 			) {
 				// We need to sync with the sample timestamp again
 				this.currentTimestamp = sample.timestamp;
@@ -1320,12 +1465,16 @@ class AudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 
 			// Round the timestamp to the sample rate
 			const sampleRate = decoderConfig.sampleRate;
-			sample.setTimestamp(Math.round(preciseTimestamp * sampleRate) / sampleRate);
+			sample.setTimestamp(
+				Math.round(preciseTimestamp * sampleRate) / sampleRate
+			);
 
 			onSample(sample);
 		};
 
-		const MatchingCustomDecoder = customAudioDecoders.find(x => x.supports(codec, decoderConfig));
+		const MatchingCustomDecoder = customAudioDecoders.find((x) =>
+			x.supports(codec, decoderConfig)
+		);
 		if (MatchingCustomDecoder) {
 			// @ts-expect-error "Can't create instance of abstract class 🤓"
 			this.customDecoder = new MatchingCustomDecoder() as CustomAudioDecoder;
@@ -1336,16 +1485,20 @@ class AudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 			// @ts-expect-error It's technically readonly
 			this.customDecoder.onSample = (sample) => {
 				if (!(sample instanceof AudioSample)) {
-					throw new TypeError('The argument passed to onSample must be an AudioSample.');
+					throw new TypeError(
+						"The argument passed to onSample must be an AudioSample."
+					);
 				}
 
 				sampleHandler(sample);
 			};
 
-			void this.customDecoderCallSerializer.call(() => this.customDecoder!.init());
+			void this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.init()
+			);
 		} else {
 			this.decoder = new AudioDecoder({
-				output: data => sampleHandler(new AudioSample(data)),
+				output: (data) => sampleHandler(new AudioSample(data)),
 				error: onError,
 			});
 			this.decoder.configure(decoderConfig);
@@ -1375,7 +1528,9 @@ class AudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 
 	flush() {
 		if (this.customDecoder) {
-			return this.customDecoderCallSerializer.call(() => this.customDecoder!.flush());
+			return this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.flush()
+			);
 		} else {
 			assert(this.decoder);
 			return this.decoder.flush();
@@ -1384,7 +1539,9 @@ class AudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 
 	close() {
 		if (this.customDecoder) {
-			void this.customDecoderCallSerializer.call(() => this.customDecoder!.close());
+			void this.customDecoderCallSerializer.call(() =>
+				this.customDecoder!.close()
+			);
 		} else {
 			assert(this.decoder);
 			this.decoder.close();
@@ -1401,7 +1558,7 @@ class PcmAudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 	readInputValue: (view: DataView, byteOffset: number) => number;
 
 	outputSampleSize: 1 | 2 | 4;
-	outputFormat: 'u8' | 's16' | 's32' | 'f32';
+	outputFormat: "u8" | "s16" | "s32" | "f32";
 	writeOutputValue: (view: DataView, byteOffset: number, value: number) => void;
 
 	// Internal state to accumulate a precise current timestamp based on audio durations, not the (potentially
@@ -1411,119 +1568,160 @@ class PcmAudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 	constructor(
 		onSample: (sample: AudioSample) => unknown,
 		onError: (error: DOMException) => unknown,
-		public decoderConfig: AudioDecoderConfig,
+		public decoderConfig: AudioDecoderConfig
 	) {
 		super(onSample, onError);
 
-		assert((PCM_AUDIO_CODECS as readonly string[]).includes(decoderConfig.codec));
+		assert(
+			(PCM_AUDIO_CODECS as readonly string[]).includes(decoderConfig.codec)
+		);
 		this.codec = decoderConfig.codec as PcmAudioCodec;
 
 		const { dataType, sampleSize, littleEndian } = parsePcmCodec(this.codec);
 		this.inputSampleSize = sampleSize;
 
 		switch (sampleSize) {
-			case 1: {
-				if (dataType === 'unsigned') {
-					this.readInputValue = (view, byteOffset) => view.getUint8(byteOffset) - 2 ** 7;
-				} else if (dataType === 'signed') {
-					this.readInputValue = (view, byteOffset) => view.getInt8(byteOffset);
-				} else if (dataType === 'ulaw') {
-					this.readInputValue = (view, byteOffset) => fromUlaw(view.getUint8(byteOffset));
-				} else if (dataType === 'alaw') {
-					this.readInputValue = (view, byteOffset) => fromAlaw(view.getUint8(byteOffset));
-				} else {
-					assert(false);
+			case 1:
+				{
+					if (dataType === "unsigned") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getUint8(byteOffset) - 2 ** 7;
+					} else if (dataType === "signed") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getInt8(byteOffset);
+					} else if (dataType === "ulaw") {
+						this.readInputValue = (view, byteOffset) =>
+							fromUlaw(view.getUint8(byteOffset));
+					} else if (dataType === "alaw") {
+						this.readInputValue = (view, byteOffset) =>
+							fromAlaw(view.getUint8(byteOffset));
+					} else {
+						assert(false);
+					}
 				}
-			}; break;
-			case 2: {
-				if (dataType === 'unsigned') {
-					this.readInputValue = (view, byteOffset) => view.getUint16(byteOffset, littleEndian) - 2 ** 15;
-				} else if (dataType === 'signed') {
-					this.readInputValue = (view, byteOffset) => view.getInt16(byteOffset, littleEndian);
-				} else {
-					assert(false);
+				break;
+			case 2:
+				{
+					if (dataType === "unsigned") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getUint16(byteOffset, littleEndian) - 2 ** 15;
+					} else if (dataType === "signed") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getInt16(byteOffset, littleEndian);
+					} else {
+						assert(false);
+					}
 				}
-			}; break;
-			case 3: {
-				if (dataType === 'unsigned') {
-					this.readInputValue = (view, byteOffset) => getUint24(view, byteOffset, littleEndian) - 2 ** 23;
-				} else if (dataType === 'signed') {
-					this.readInputValue = (view, byteOffset) => getInt24(view, byteOffset, littleEndian);
-				} else {
-					assert(false);
+				break;
+			case 3:
+				{
+					if (dataType === "unsigned") {
+						this.readInputValue = (view, byteOffset) =>
+							getUint24(view, byteOffset, littleEndian) - 2 ** 23;
+					} else if (dataType === "signed") {
+						this.readInputValue = (view, byteOffset) =>
+							getInt24(view, byteOffset, littleEndian);
+					} else {
+						assert(false);
+					}
 				}
-			}; break;
-			case 4: {
-				if (dataType === 'unsigned') {
-					this.readInputValue = (view, byteOffset) => view.getUint32(byteOffset, littleEndian) - 2 ** 31;
-				} else if (dataType === 'signed') {
-					this.readInputValue = (view, byteOffset) => view.getInt32(byteOffset, littleEndian);
-				} else if (dataType === 'float') {
-					this.readInputValue = (view, byteOffset) => view.getFloat32(byteOffset, littleEndian);
-				} else {
-					assert(false);
+				break;
+			case 4:
+				{
+					if (dataType === "unsigned") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getUint32(byteOffset, littleEndian) - 2 ** 31;
+					} else if (dataType === "signed") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getInt32(byteOffset, littleEndian);
+					} else if (dataType === "float") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getFloat32(byteOffset, littleEndian);
+					} else {
+						assert(false);
+					}
 				}
-			}; break;
-			case 8: {
-				if (dataType === 'float') {
-					this.readInputValue = (view, byteOffset) => view.getFloat64(byteOffset, littleEndian);
-				} else {
-					assert(false);
+				break;
+			case 8:
+				{
+					if (dataType === "float") {
+						this.readInputValue = (view, byteOffset) =>
+							view.getFloat64(byteOffset, littleEndian);
+					} else {
+						assert(false);
+					}
 				}
-			}; break;
+				break;
 			default: {
 				assertNever(sampleSize);
 				assert(false);
-			};
+			}
 		}
 
 		switch (sampleSize) {
-			case 1: {
-				if (dataType === 'ulaw' || dataType === 'alaw') {
+			case 1:
+				{
+					if (dataType === "ulaw" || dataType === "alaw") {
+						this.outputSampleSize = 2;
+						this.outputFormat = "s16";
+						this.writeOutputValue = (view, byteOffset, value) =>
+							view.setInt16(byteOffset, value, true);
+					} else {
+						this.outputSampleSize = 1;
+						this.outputFormat = "u8";
+						this.writeOutputValue = (view, byteOffset, value) =>
+							view.setUint8(byteOffset, value + 2 ** 7);
+					}
+				}
+				break;
+			case 2:
+				{
 					this.outputSampleSize = 2;
-					this.outputFormat = 's16';
-					this.writeOutputValue = (view, byteOffset, value) => view.setInt16(byteOffset, value, true);
-				} else {
-					this.outputSampleSize = 1;
-					this.outputFormat = 'u8';
-					this.writeOutputValue = (view, byteOffset, value) => view.setUint8(byteOffset, value + 2 ** 7);
+					this.outputFormat = "s16";
+					this.writeOutputValue = (view, byteOffset, value) =>
+						view.setInt16(byteOffset, value, true);
 				}
-			}; break;
-			case 2: {
-				this.outputSampleSize = 2;
-				this.outputFormat = 's16';
-				this.writeOutputValue = (view, byteOffset, value) => view.setInt16(byteOffset, value, true);
-			}; break;
-			case 3: {
-				this.outputSampleSize = 4;
-				this.outputFormat = 's32';
-				// From https://www.w3.org/TR/webcodecs:
-				// AudioData containing 24-bit samples SHOULD store those samples in s32 or f32. When samples are
-				// stored in s32, each sample MUST be left-shifted by 8 bits.
-				this.writeOutputValue = (view, byteOffset, value) => view.setInt32(byteOffset, value << 8, true);
-			}; break;
-			case 4: {
-				this.outputSampleSize = 4;
-
-				if (dataType === 'float') {
-					this.outputFormat = 'f32';
-					this.writeOutputValue = (view, byteOffset, value) => view.setFloat32(byteOffset, value, true);
-				} else {
-					this.outputFormat = 's32';
-					this.writeOutputValue = (view, byteOffset, value) => view.setInt32(byteOffset, value, true);
+				break;
+			case 3:
+				{
+					this.outputSampleSize = 4;
+					this.outputFormat = "s32";
+					// From https://www.w3.org/TR/webcodecs:
+					// AudioData containing 24-bit samples SHOULD store those samples in s32 or f32. When samples are
+					// stored in s32, each sample MUST be left-shifted by 8 bits.
+					this.writeOutputValue = (view, byteOffset, value) =>
+						view.setInt32(byteOffset, value << 8, true);
 				}
-			}; break;
-			case 8: {
-				this.outputSampleSize = 4;
+				break;
+			case 4:
+				{
+					this.outputSampleSize = 4;
 
-				this.outputFormat = 'f32';
-				this.writeOutputValue = (view, byteOffset, value) => view.setFloat32(byteOffset, value, true);
-			}; break;
+					if (dataType === "float") {
+						this.outputFormat = "f32";
+						this.writeOutputValue = (view, byteOffset, value) =>
+							view.setFloat32(byteOffset, value, true);
+					} else {
+						this.outputFormat = "s32";
+						this.writeOutputValue = (view, byteOffset, value) =>
+							view.setInt32(byteOffset, value, true);
+					}
+				}
+				break;
+			case 8:
+				{
+					this.outputSampleSize = 4;
+
+					this.outputFormat = "f32";
+					this.writeOutputValue = (view, byteOffset, value) =>
+						view.setFloat32(byteOffset, value, true);
+				}
+				break;
 			default: {
 				assertNever(sampleSize);
 				assert(false);
-			};
-		};
+			}
+		}
 	}
 
 	getDecodeQueueSize() {
@@ -1533,13 +1731,23 @@ class PcmAudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 	decode(packet: EncodedPacket) {
 		const inputView = toDataView(packet.data);
 
-		const numberOfFrames = packet.byteLength / this.decoderConfig.numberOfChannels / this.inputSampleSize;
+		const numberOfFrames =
+			packet.byteLength /
+			this.decoderConfig.numberOfChannels /
+			this.inputSampleSize;
 
-		const outputBufferSize = numberOfFrames * this.decoderConfig.numberOfChannels * this.outputSampleSize;
+		const outputBufferSize =
+			numberOfFrames *
+			this.decoderConfig.numberOfChannels *
+			this.outputSampleSize;
 		const outputBuffer = new ArrayBuffer(outputBufferSize);
 		const outputView = new DataView(outputBuffer);
 
-		for (let i = 0; i < numberOfFrames * this.decoderConfig.numberOfChannels; i++) {
+		for (
+			let i = 0;
+			i < numberOfFrames * this.decoderConfig.numberOfChannels;
+			i++
+		) {
 			const inputIndex = i * this.inputSampleSize;
 			const outputIndex = i * this.outputSampleSize;
 
@@ -1548,7 +1756,10 @@ class PcmAudioDecoderWrapper extends DecoderWrapper<AudioSample> {
 		}
 
 		const preciseDuration = numberOfFrames / this.decoderConfig.sampleRate;
-		if (this.currentTimestamp === null || Math.abs(packet.timestamp - this.currentTimestamp) >= preciseDuration) {
+		if (
+			this.currentTimestamp === null ||
+			Math.abs(packet.timestamp - this.currentTimestamp) >= preciseDuration
+		) {
 			// We need to sync with the packet timestamp again
 			this.currentTimestamp = packet.timestamp;
 		}
@@ -1589,7 +1800,7 @@ export class AudioSampleSink extends BaseMediaSampleSink<AudioSample> {
 	/** Creates a new {@link AudioSampleSink} for the given {@link InputAudioTrack}. */
 	constructor(audioTrack: InputAudioTrack) {
 		if (!(audioTrack instanceof InputAudioTrack)) {
-			throw new TypeError('audioTrack must be an InputAudioTrack.');
+			throw new TypeError("audioTrack must be an InputAudioTrack.");
 		}
 
 		super();
@@ -1600,12 +1811,12 @@ export class AudioSampleSink extends BaseMediaSampleSink<AudioSample> {
 	/** @internal */
 	async _createDecoder(
 		onSample: (sample: AudioSample) => unknown,
-		onError: (error: DOMException) => unknown,
+		onError: (error: DOMException) => unknown
 	) {
 		if (!(await this._audioTrack.canDecode())) {
 			throw new Error(
-				'This audio track cannot be decoded by this browser. Make sure to check decodability before using'
-				+ ' a track.',
+				"This audio track cannot be decoded by this browser. Make sure to check decodability before using" +
+					" a track."
 			);
 		}
 
@@ -1638,7 +1849,7 @@ export class AudioSampleSink extends BaseMediaSampleSink<AudioSample> {
 		for await (const sample of this.mediaSamplesAtTimestamps([timestamp])) {
 			return sample;
 		}
-		throw new Error('Internal error: Iterator returned nothing.');
+		throw new Error("Internal error: Iterator returned nothing.");
 	}
 
 	/**
@@ -1693,7 +1904,7 @@ export class AudioBufferSink {
 	/** Creates a new {@link AudioBufferSink} for the given {@link InputAudioTrack}. */
 	constructor(audioTrack: InputAudioTrack) {
 		if (!(audioTrack instanceof InputAudioTrack)) {
-			throw new TypeError('audioTrack must be an InputAudioTrack.');
+			throw new TypeError("audioTrack must be an InputAudioTrack.");
 		}
 
 		this._audioSampleSink = new AudioSampleSink(audioTrack);
@@ -1732,7 +1943,7 @@ export class AudioBufferSink {
 	buffers(startTimestamp = 0, endTimestamp = Infinity) {
 		return mapAsyncGenerator(
 			this._audioSampleSink.samples(startTimestamp, endTimestamp),
-			data => this._audioSampleToWrappedArrayBuffer(data),
+			(data) => this._audioSampleToWrappedArrayBuffer(data)
 		);
 	}
 
@@ -1747,7 +1958,7 @@ export class AudioBufferSink {
 	buffersAtTimestamps(timestamps: AnyIterable<number>) {
 		return mapAsyncGenerator(
 			this._audioSampleSink.samplesAtTimestamps(timestamps),
-			data => data && this._audioSampleToWrappedArrayBuffer(data),
+			(data) => data && this._audioSampleToWrappedArrayBuffer(data)
 		);
 	}
 }

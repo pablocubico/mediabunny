@@ -102,7 +102,16 @@ export type ConversionVideoOptions = {
 	 * beyond the frame will be filled with black. Cropping is performed before rotation
 	 * and resizing.
 	 */
-	crop?: { left: number; top: number; width: number; height: number };
+	crop?: {
+		/** The distance in pixels from the left edge of the source frame to the left edge of the crop rectangle. */
+		left: number;
+		/** The distance in pixels from the top edge of the source frame to the top edge of the crop rectangle. */
+		top: number;
+		/** The width in pixels of the crop rectangle. */
+		width: number;
+		/** The height in pixels of the crop rectangle. */
+		height: number;
+	};
 	/**
 	 * The desired width of the output video in pixels, defaulting to the video's natural display width. If height
 	 * is not set, it will be deduced automatically based on aspect ratio.

@@ -1,0 +1,117 @@
+import {
+	Input,
+	Output,
+	WebMOutputFormat,
+	BufferTarget,
+	Conversion,
+	BlobSource,
+	ALL_FORMATS,
+} from "mediabunny";
+
+const selectMediaButton = document.querySelector(
+	"#select-file"
+) as HTMLButtonElement;
+const fileNameElement = document.querySelector(
+	"#file-name"
+) as HTMLParagraphElement;
+const horizontalRule = document.querySelector("hr") as HTMLHRElement;
+const outputContainer = document.querySelector(
+	"#output-container"
+) as HTMLDivElement;
+const errorElement = document.querySelector(
+	"#error-element"
+) as HTMLParagraphElement;
+
+const cropVideo = async (file: File) => {
+	fileNameElement.textContent = file.name;
+	horizontalRule.style.display = "";
+	errorElement.textContent = "";
+	outputContainer.innerHTML = "";
+
+	try {
+		const input = new Input({
+			source: new BlobSource(file),
+			formats: ALL_FORMATS,
+		});
+
+		const videoTrack = await input.getPrimaryVideoTrack();
+		if (!videoTrack) {
+			throw new Error("File has no video track.");
+		}
+
+		if (videoTrack.codec === null) {
+			throw new Error("Unsupported video codec.");
+		}
+
+		if (!(await videoTrack.canDecode())) {
+			throw new Error("Unable to decode the video track.");
+		}
+
+		const output = new Output({
+			format: new WebMOutputFormat(),
+			target: new BufferTarget(),
+		});
+
+		const conversion = await Conversion.init({
+			input,
+			output,
+			video: {
+				crop: {
+					top: 0,
+					left: 0,
+					width: 300,
+					height: 300,
+				},
+			},
+		});
+
+		await conversion.execute();
+
+		const buffer = output.target.buffer;
+		if (!buffer) {
+			throw new Error("Failed to generate output buffer");
+		}
+		const blob = new Blob([buffer], { type: "video/webm" });
+		const url = URL.createObjectURL(blob);
+
+		const video = document.createElement("video");
+		video.src = url;
+		video.controls = true;
+		video.className = "rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800";
+		outputContainer.appendChild(video);
+	} catch (error) {
+		console.error(error);
+		errorElement.textContent = String(error);
+		outputContainer.innerHTML = "";
+	}
+};
+
+selectMediaButton.addEventListener("click", () => {
+	const fileInput = document.createElement("input");
+	fileInput.type = "file";
+	fileInput.accept = "video/*,video/x-matroska";
+	fileInput.addEventListener("change", () => {
+		const file = fileInput.files?.[0];
+		if (!file) {
+			return;
+		}
+
+		void cropVideo(file);
+	});
+
+	fileInput.click();
+});
+
+document.addEventListener("dragover", (event) => {
+	event.preventDefault();
+	event.dataTransfer!.dropEffect = "copy";
+});
+
+document.addEventListener("drop", (event) => {
+	event.preventDefault();
+	const files = event.dataTransfer?.files;
+	const file = files && files.length > 0 ? files[0] : undefined;
+	if (file) {
+		void cropVideo(file);
+	}
+});
