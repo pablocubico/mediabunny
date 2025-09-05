@@ -11,9 +11,12 @@ import {
 const selectMediaButton = document.querySelector(
 	"#select-file"
 ) as HTMLButtonElement;
+const cropButton = document.querySelector("#crop-button") as HTMLButtonElement;
 const fileNameElement = document.querySelector(
 	"#file-name"
 ) as HTMLParagraphElement;
+
+let selectedFile: File | null = null;
 const horizontalRule = document.querySelector("hr") as HTMLHRElement;
 const outputContainer = document.querySelector(
 	"#output-container"
@@ -94,17 +97,21 @@ const cropVideo = async (file: File) => {
 	}
 };
 
+const updateSelectedFile = (file: File | null) => {
+	selectedFile = file;
+	fileNameElement.textContent = file ? file.name : "";
+	cropButton.disabled = !file;
+	errorElement.textContent = "";
+	outputContainer.innerHTML = "";
+};
+
 selectMediaButton.addEventListener("click", () => {
 	const fileInput = document.createElement("input");
 	fileInput.type = "file";
 	fileInput.accept = "video/*,video/x-matroska";
 	fileInput.addEventListener("change", () => {
 		const file = fileInput.files?.[0];
-		if (!file) {
-			return;
-		}
-
-		void cropVideo(file);
+		updateSelectedFile(file || null);
 	});
 
 	fileInput.click();
@@ -117,9 +124,16 @@ document.addEventListener("dragover", (event) => {
 
 document.addEventListener("drop", (event) => {
 	event.preventDefault();
-	const files = event.dataTransfer?.files;
-	const file = files && files.length > 0 ? files[0] : undefined;
-	if (file) {
-		void cropVideo(file);
+	if (!event.dataTransfer?.files) {
+		updateSelectedFile(null);
+		return;
+	}
+	const file = event.dataTransfer.files[0] ?? null;
+	updateSelectedFile(file);
+});
+
+cropButton.addEventListener("click", () => {
+	if (selectedFile) {
+		void cropVideo(selectedFile);
 	}
 });
