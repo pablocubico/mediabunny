@@ -160,6 +160,7 @@ export {
 	AudioSampleCopyToOptions,
 	VideoSample,
 	VideoSampleInit,
+	CropRectangle,
 } from './sample';
 export {
 	AudioBufferSink,
@@ -188,5 +189,10 @@ export {
 	registerDecoder,
 	registerEncoder,
 } from './custom-coder';
+export {
+	MetadataTags,
+	AttachedImage,
+	RichImageData,
+} from './tags';
 
 // 🐡🦔
